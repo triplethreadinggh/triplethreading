@@ -5,6 +5,7 @@ build/
 dist/
 wheels/
 wheelhouse/
+target/
 *.egg-info
 
 # Virtual environments

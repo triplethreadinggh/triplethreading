@@ -1,7 +1,8 @@
 from triplethreading._core import hello_from_bin
 from triplethreading.model import LinearRegression
+from triplethreading.logit import LogisticRegression
 
 def hello() -> str:
     return hello_from_bin()
 
-__all__ = ['LinearRegression']
+__all__ = ['LinearRegression', 'LogisticRegression']

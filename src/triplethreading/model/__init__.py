@@ -1,3 +1,3 @@
-from .regression import LinearRegression
+from .regression import LinearRegression, CauchyRegression
 
-__all__ = ['LinearRegression']
+__all__ = ['LinearRegression', 'CauchyRegression']

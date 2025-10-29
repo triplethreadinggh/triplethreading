@@ -328,6 +328,102 @@ class LinearRegression:
             }
         }
 
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import numpy as np
+from scipy import stats
+
+class CauchyRegression:
+    def __init__(self, learning_rate=0.001, max_epochs=5000, tolerance=1e-6, c=1.0):
+        self.learning_rate = learning_rate
+        self.max_epochs = max_epochs
+        self.tolerance = tolerance
+        self.c = c
+        
+        self.w = None  # parameter vector including intercept
+        self.optimizer = None
+        self.loss_history = []
+        self.fitted = False
+
+    def _cauchy_loss(self, y_pred, y):
+        # L = (c^2 / 2) * log(1 + ((y - y_pred)/c)^2)
+        diff = (y - y_pred) / self.c
+        return (self.c ** 2 / 2) * torch.log(1 + diff ** 2).mean()
+
+    def forward(self, X):
+        return X @ self.w[:-1] + self.w[-1]
+
+    def fit(self, X, y):
+        X = torch.tensor(X, dtype=torch.float32)
+        y = torch.tensor(y, dtype=torch.float32)
+
+        n_features = X.shape[1]
+        self.w = nn.Parameter(torch.randn(n_features + 1, requires_grad=True))
+        self.optimizer = optim.Adam([self.w], lr=self.learning_rate)
+
+        prev_loss = float("inf")
+
+        for epoch in range(self.max_epochs):
+            self.optimizer.zero_grad()
+
+            y_pred = self.forward(X)
+            loss = self._cauchy_loss(y_pred, y)
+
+            loss.backward()
+            self.optimizer.step()
+
+            current_loss = loss.item()
+            self.loss_history.append(current_loss)
+
+            if abs(prev_loss - current_loss) < self.tolerance:
+                print(f"Converged at epoch {epoch+1}")
+                break
+            
+            prev_loss = current_loss
+
+        # Save stats for CI
+        self.X = X
+        self.y = y
+        self.n_samples = len(y)
+        self.residuals = y - self.forward(X).detach()
+        self.fitted = True
+        return self
+
+    def predict(self, X):
+        if not self.fitted:
+            raise ValueError("Model must be trained first.")
+        X = torch.tensor(X, dtype=torch.float32)
+        return (X @ self.w[:-1] + self.w[-1]).detach().numpy()
+
+    def get_parameters(self):
+        return self.w.detach().numpy()
+
+    def confidence_intervals(self, alpha=0.05):
+        if not self.fitted:
+            raise ValueError("Fit model first!")
+
+        # Approximate Hessian via OLS style using residual variance
+        params = self.get_parameters()
+        n, p = self.X.shape
+        df = n - p - 1
+
+        # Residual variance
+        rss = float(torch.sum(self.residuals ** 2))
+        mse = rss / df
+
+        # X matrix with a column of 1s for intercept
+        X_design = torch.cat([self.X, torch.ones((n,1))], dim=1)
+        XtX_inv = torch.inverse(X_design.T @ X_design)
+        
+        se = np.sqrt(mse * np.diag(XtX_inv))
+        t_val = stats.t.ppf(1 - alpha / 2, df)
+
+        intervals = [(params[i] - t_val * se[i], params[i] + t_val * se[i]) 
+                     for i in range(len(params))]
+
+        return intervals
+
 if __name__ == '__main__':
 
     hydropower = pl.read_csv('./Hydropower.csv', quote_char = '"', infer_schema_length = 10000)
